@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "era5_pipeline"
+version = "0.1.0"
+description = "ERA5 Iberia pipeline: GRIB/NetCDF -> Zarr + anemoi-datasets"
+requires-python = ">=3.11"
+# dependencias gestionadas en environment.yml (D-003)
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

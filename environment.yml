@@ -1,0 +1,25 @@
+name: era5
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  # datos
+  - xarray
+  - cfgrib
+  - eccodes
+  - netcdf4
+  - zarr=2.18   # anemoi-datasets 0.5.44 exige zarr<=2.18.7 (D-007)
+  - dask
+  - cdsapi>=0.7.7   # API nueva del CDS (token sin uid)
+  - pyyaml
+  - cdo
+  - nco
+  - anemoi-datasets=0.5.44
+  # calidad
+  - pytest
+  - pytest-cov
+  - ruff
+  - pre-commit
+  - pip
+  - pip:
+      - -e .

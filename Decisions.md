@@ -1,0 +1,111 @@
+# Decisions.md — era5-anemoi-iberia
+
+Registro de decisiones de arquitectura (formato ADR ligero). Una entrada por decisión con alternativas reales descartadas. Si una decisión se revierte, no se borra: se marca **Sustituida por D-0XX**.
+
+Estados: `Propuesta` (pendiente de validar en la fase indicada) · `Aceptada` · `Sustituida`.
+
+Plantilla:
+```
+## D-0XX — Título
+- Fecha / Fase:
+- Estado:
+- Contexto:
+- Decisión:
+- Alternativas descartadas:
+- Consecuencias:
+```
+
+---
+
+## D-001 — Dominio y periodo: Iberia 2020–2022 a 6 h
+- Fecha / Fase: 25/09/2026 · planificación
+- Estado: Propuesta
+- Contexto: el puesto es de datasets **regionales**; hay que mantener volumen y colas del CDS manejables en 1–2 semanas.
+- Decisión: caja N45 W−10 S35 E5, 2020–2022, frecuencia 6 h (timestep típico de AIFS), 6 variables de superficie + `t`/`z` en 500 y 850 hPa.
+- Alternativas descartadas: global a baja resolución (menos alineado con "regional"); solo Catalunya (demasiado pequeño para que chunking y QC sean interesantes); horario (x6 volumen sin aportar señal para el CV).
+- Consecuencias: < 1 GB; pipeline ejecutable en portátil y CI con fixtures.
+
+## D-002 — GRIB como formato raw canónico; NetCDF solo para comparación
+- Fecha / Fase: 25/09/2026 · planificación (validar en F1–F2)
+- Estado: Aceptada (F2: valores GRIB y NetCDF idénticos, ver `reports/grib_vs_netcdf_*.md`)
+- Contexto: el puesto pide NetCDF y GRIB; anemoi-datasets documenta mejor la fuente GRIB y ha tenido incidencias con NetCDF.
+- Decisión: descargar todo en GRIB; un mes en NetCDF para demostrar ambos formatos y documentar diferencias.
+- Alternativas descartadas: todo NetCDF (más cómodo en Xarray pero riesgo en F5); ambos para todo (doble descarga sin valor).
+- Consecuencias: dependencia de eccodes/cfgrib → ver D-003.
+
+## D-003 — Entorno con micromamba + imagen Docker
+- Fecha / Fase: 25/09/2026 · planificación
+- Estado: Aceptada (F0)
+- Contexto: eccodes, CDO y NCO son binarios de sistema; pip no los resuelve de forma fiable.
+- Decisión: `environment.yml` con conda-forge vía micromamba, misma definición en Docker y en CI.
+- Alternativas descartadas: `uv`/pip + apt (dos fuentes de verdad, versiones de eccodes divergentes); Poetry (mismo problema).
+- Consecuencias: CI algo más lento → cachear el entorno (F4).
+- Nota F0 (25/09/2026): en local se usa `mamba` (miniforge ya instalado) con el mismo `environment.yml`; micromamba queda para Docker/CI. Estado → Aceptada.
+
+## D-004 — Los tests y la CI nunca acceden al CDS
+- Fecha / Fase: 25/09/2026 · planificación
+- Estado: Propuesta
+- Contexto: el CDS tiene colas y requiere credenciales; tests dependientes de red serían lentos y frágiles.
+- Decisión: `cdsapi` mockeado en unit tests; e2e sobre fixtures GRIB/NetCDF < 1 MB versionados.
+- Alternativas descartadas: secreto del CDS en GitHub Actions con descarga mínima (lento, no determinista).
+- Consecuencias: la descarga real se valida a mano y queda registrada en `progress.md`.
+
+## D-005 — Dos salidas: Zarr propio (Xarray) + dataset anemoi desde receta
+- Fecha / Fase: 25/09/2026 · planificación (validar en F5)
+- Estado: Propuesta
+- Contexto: el pipeline propio demuestra dominio de Xarray/CDO; anemoi demuestra encaje con el ecosistema del puesto.
+- Decisión: mantener ambos a partir de los mismos GRIB raw y comparar estadísticos entre ellos.
+- Alternativas descartadas: solo anemoi (oculta el trabajo de transformación); solo Zarr propio (pierde el valorable principal).
+- Consecuencias: la comparación de estadísticos actúa como test de consistencia cruzado.
+
+## D-006 — Slurm solo como simulación local y como stretch
+- Fecha / Fase: 25/09/2026 · planificación
+- Estado: Propuesta
+- Contexto: sin acceso a HPC real; Slurm es gap esencial pero no cerrable de verdad en 2 semanas.
+- Decisión: F6 con `slurm-docker-cluster` solo si el MVP (F0–F5) está cerrado el 09/10; se etiqueta como simulación en README y CV.
+- Alternativas descartadas: omitirlo (deja el gap intacto); presentarlo como experiencia HPC (overclaiming).
+- Consecuencias: el gap de HPC se reduce en la narrativa de entrevista, no desaparece.
+
+## D-007 — anemoi-datasets 0.5.44 fijado ⇒ zarr v2 (2.18.x)
+- Fecha / Fase: 25/09/2026 · F0
+- Estado: Aceptada
+- Contexto: CLAUDE.md pide comprobar compatibilidad zarr v2/v3 antes de fijar versión. La última versión de anemoi-datasets (0.5.44, en conda-forge y PyPI) declara `zarr<=2.18.7` y `numcodecs<0.16`.
+- Decisión: fijar `anemoi-datasets=0.5.44` y `zarr=2.18` en `environment.yml`; el Zarr propio (F2) también se escribe en formato v2 para que ambos sean comparables y abribles con el mismo entorno. El test de humo falla si zarr deja de ser 2.x.
+- Alternativas descartadas: zarr 3 + versión antigua/no fijada de anemoi (no resuelve); dos entornos separados (duplica mantenimiento y CI).
+- Consecuencias: no se usan features de zarr v3 (sharding). Revisar si anemoi-datasets publica soporte v3 antes de F5.
+
+## D-008 — `tp` se descarga horaria; el resto de single levels también, pressure levels a 6 h
+- Fecha / Fase: 25/09/2026 · F0 (validar en F2)
+- Estado: Aceptada (F2)
+- Contexto: `tp` en ERA5 es acumulada por hora; para obtener la acumulación 6 h hay que **sumar** las 6 horas, no submuestrear.
+- Decisión: una petición horaria por mes para single levels (todas las variables, para no duplicar peticiones); pressure levels solo a 00/06/12/18. Las instantáneas de superficie se submuestrean a 6 h en F2.
+- Alternativas descartadas: pedir solo 00/06/12/18 para todo (tp sería incorrecta); petición separada horaria solo para tp (el doble de peticiones en cola por un ahorro de volumen pequeño en este dominio).
+- Consecuencias: raw single levels ×6 de volumen (sigue muy por debajo de 1 GB/año para esta caja). La convención de ventana de 6 h se define en F2.
+
+## D-009 — Ingesta: manifest con sha256, escritura `.part` + rename, 4 peticiones concurrentes
+- Fecha / Fase: 25/09/2026 · F1
+- Estado: Aceptada
+- Contexto: 72 peticiones (36 meses × 2 tipos) + 2 NetCDF; la 1ª petición tardó ~10 min entre cola y proceso → en serie serían ~12 h. Relanzar no debe duplicar ni dejar ficheros a medias.
+- Decisión: `data/raw/manifest.json` con clave = nombre lógico (`{single|pressure}_AAAA-MM.{grib|nc}`) y `path`, `size`, `sha256`, `downloaded_at`. Skip solo si el fichero existe y tamaño + sha256 coinciden; si no, se vuelve a descargar. Descarga a `<nombre>.part` y `rename` atómico; manifest también se reescribe vía tmp + rename bajo lock. Reintentos con backoff exponencial (`backoff_s * 2**n`). `ThreadPoolExecutor` con `workers` en config (4).
+- Alternativas descartadas: skip por mera existencia del fichero (no detecta descargas truncadas/corruptas); una petición por año (más riesgo de rechazo por límite de tamaño del CDS y reintentos más caros); Slurm/colas propias (fuera de F1, ver D-006).
+- Consecuencias: ficheros fuera del manifest se re-descargan (el `single_2020-01.grib` de F0 se registró a mano tras verificar 744 mensajes/variable). Si el CDS devuelve zip en NetCDF (stepTypes mixtos) se guarda como `.nc.zip` y se resuelve en F2.
+
+## D-010 — Normalización: nombres cfgrib, unidades nativas ERA5 con metadatos CF, `tp` 6 h en (T−6h, T]
+- Fecha / Fase: 25/09/2026 · F2
+- Estado: Aceptada
+- Contexto: hay que fijar un esquema único para GRIB (cfgrib) y NetCDF (CDS) y una convención de ventana para `tp` antes de comparar con anemoi en F5.
+- Decisión:
+  - Nombres de variable de cfgrib (`t2m, u10, v10, msl, sp, tp, t, z`), que coinciden con los del NetCDF del CDS. Dims `time, level, latitude, longitude`; lat y niveles ascendentes, lon en −180..180, recorte explícito a `cfg["area"]`.
+  - Unidades nativas ERA5 (K, Pa, m s-1, m, m2 s-2), reescritas en sintaxis CF + `standard_name` CF; `GRIB_*` de rejilla eliminados tras el recorte (quedaban obsoletos).
+  - `tp`: serie horaria en `valid_time` (cfgrib la entrega como `(time, step)` de pasadas 06/18) → `resample("6h", closed="right", label="right").sum(min_count=6)`. El valor en T es la acumulación (T−6h, T], convención ECMWF/anemoi. Ventana incompleta → NaN (el 2020-01-01 00 UTC lo será siempre: necesita diciembre 2019). Se concatena todo el periodo antes de agregar para que las ventanas de 00 UTC del día 1 usen las horas del mes anterior.
+  - Instantáneas: selección de 00/06/12/18.
+- Alternativas descartadas: nombres cortos ECMWF (`2t`, `10u`: empiezan por dígito, incómodos en Python y distintos del NetCDF); convertir `tp` a mm (añade un factor 1000 a cada comparación con anemoi); ventana (T, T+6h] o centrada (CDO etiqueta en el punto medio, 03:30); submuestrear `tp` (incorrecto para acumulados).
+- Consecuencias: validado contra CDO `timselsum,6,1`: diferencia 0 en ene-2020 (`reports/cdo_vs_xarray.md`). Test sintético con ventana cruzando cambio de mes y conservación de la suma.
+
+## D-011 — Zarr: reescritura completa atómica (tmp + rename) en vez de append/region
+- Fecha / Fase: 25/09/2026 · F2
+- Estado: Aceptada (revisar en F6)
+- Contexto: CLAUDE.md sugería escritura por región/append controlado. El dataset completo es < 1 GB y `tp` necesita las horas del mes anterior, así que procesar mes a mes obliga a solapar ficheros.
+- Decisión: `transform` abre todos los GRIB de forma perezosa, construye el dataset completo y lo escribe en `<zarr>.tmp` que luego reemplaza al destino (zarr v2, metadatos consolidados, chunks de `configs/`).
+- Alternativas descartadas: `append_dim="time"` (relanzar un mes duplica pasos; requiere lógica de dedupe); `region=` por mes (requiere pre-crear el store y gestionar el solape de `tp`: complejidad sin beneficio a este volumen).
+- Consecuencias: relanzar reconstruye todo (segundos-minutos para 3 años). Si en F6 se paraleliza por mes con Slurm, pasar a `region=` con store precreado.

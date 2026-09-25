@@ -1,0 +1,44 @@
+# Dominio, variables y periodo del proyecto (D-001)
+name: iberia
+area: [45, -10, 35, 5]        # N, W, S, E (orden CDS)
+grid: [0.25, 0.25]
+period:
+  start: "2020-01-01"
+  end: "2022-12-31"
+frequency: 6h
+
+single_levels:
+  dataset: reanalysis-era5-single-levels
+  # tp es acumulada: se descarga horaria para sumar a 6 h en F2 (D-008)
+  hours: all
+  variables:
+    2t: 2m_temperature
+    10u: 10m_u_component_of_wind
+    10v: 10m_v_component_of_wind
+    msl: mean_sea_level_pressure
+    tp: total_precipitation
+    sp: surface_pressure
+
+pressure_levels:
+  dataset: reanalysis-era5-pressure-levels
+  hours: ["00:00", "06:00", "12:00", "18:00"]
+  levels: [500, 850]
+  variables:
+    t: temperature
+    z: geopotential
+
+chunks:
+  time: 124        # ~1 mes a 6 h
+  latitude: -1
+  longitude: -1
+
+paths:
+  raw: data/raw
+  interim: data/interim
+  zarr: data/zarr/iberia.zarr
+
+ingest:
+  netcdf_month: "2020-01"   # único mes también en NetCDF, para comparar formatos (D-002)
+  retries: 3
+  backoff_s: 60             # espera = backoff_s * 2**intento
+  workers: 4                # peticiones simultáneas al CDS (la cola es el cuello de botella)
