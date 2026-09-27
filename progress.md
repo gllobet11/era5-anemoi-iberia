@@ -177,4 +177,5 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 - La memoria se muestrea, no se aplica como límite: con el intervalo por defecto de 30 s el pico salía en 3,7 GiB; con `--acctg-freq=task=2`, 5,1 GiB. Sin cgroups, `--mem` solo sirve para planificar.
 - La duración de transform varía entre ejecuciones (de 5 min 53 s a 10 min 58 s) porque los nodos comparten el portátil con el resto de procesos: no es un benchmark.
 **Decisiones generadas:** → D-015 (D-006 → Aceptada; D-011 revisada, se mantiene)
-**Siguiente paso:** F7 (CERRA, stretch) o F8 (cierre).
+- CI verde en `main` (run 36310772970): lint 8 s, test 31 s, e2e 32 s, docker 2 min 37 s.
+**Siguiente paso:** F7 (CERRA, stretch) o F8 (cierre). Clúster: `docker compose down` en `../slurm-docker-cluster` (el volumen `gpfs_apps` conserva el entorno).
