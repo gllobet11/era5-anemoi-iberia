@@ -154,4 +154,5 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 - `tp` anemoi ≠ propio en 9,5e-7 m. Parecía un error de agregación, pero la diferencia es siempre < rango/2¹⁶ (ratio máx. 0,996): viene del GRIB temporal de 16 bits de `accumulate`. Documentado en D-014.
 - Los estadísticos que guarda anemoi (y que imprime `inspect`) cubren solo 2020-01-01 06 → 2022-05-26 12, no todo el dataset. Por eso difieren de los del QC propio, aunque los datos son los mismos.
 **Decisiones generadas:** → D-014 (D-005 → Aceptada)
-**Siguiente paso:** push y CI verde; después, F6 (Slurm, stretch), que se puede empezar porque el MVP se cierra antes del 09/10.
+- CI verde en `main` (run 36306566196): lint 4 s, test 2 min 7 s, e2e 1 min 44 s, docker 2 min 45 s.
+**Siguiente paso:** F6 (Slurm, stretch), que se puede empezar porque el MVP se cierra antes del 09/10.
