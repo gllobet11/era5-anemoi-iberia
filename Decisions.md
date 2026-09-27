@@ -52,7 +52,7 @@ Plantilla:
 
 ## D-005 — Dos salidas: Zarr propio (Xarray) + dataset anemoi desde receta
 - Fecha / Fase: 25/09/2026 · planificación (validar en F5)
-- Estado: Propuesta
+- Estado: Aceptada (F5: mismos valores en 9 de 10 variables, `tp` < 1 paso de cuantización; ver D-014)
 - Contexto: el pipeline propio demuestra dominio de Xarray/CDO; anemoi demuestra encaje con el ecosistema del puesto.
 - Decisión: mantener ambos a partir de los mismos GRIB raw y comparar estadísticos entre ellos.
 - Alternativas descartadas: solo anemoi (oculta el trabajo de transformación); solo Zarr propio (pierde el valorable principal).
@@ -134,3 +134,15 @@ Plantilla:
   - `docker`: `docker build` + `pytest` dentro de la imagen, sin push. Base `mambaorg/micromamba:2.3.2` fijada.
 - Alternativas descartadas: cobertura solo en unit tests (`qc()` y `to_markdown` solo se ejercitan en el e2e: 79,6 %); ruff del entorno conda en `lint` (versión no fijada, distinta de la de pre-commit); push de la imagen a un registry (nadie la consume); caché de capas Docker en GHA (optimización sin necesidad demostrada).
 - Consecuencias: el job `docker` resuelve el entorno desde cero en cada ejecución (~2,5 min en local). La imagen pesa 1,9 GB. Las versiones no fijadas de `environment.yml` pueden cambiar entre ejecuciones de CI: si rompe algo, fijar o generar un lock.
+
+## D-014 — Receta anemoi: fuente `grib` + `accumulate` con plugin `grib-hourly-accum`, inicio 06 UTC
+- Fecha / Fase: 27/09/2026 · F5
+- Estado: Aceptada
+- Contexto: la receta tiene que leer los mismos GRIB raw que el Zarr propio (D-005) y agregar `tp` horaria a 6 h. En anemoi-datasets 0.5.44, `accumulate` calcula bien los intervalos (covering `{mars: {class: ea}}`: pasadas 06/18, pasos horarios), pero `GribSource` no implementa `execute_intervals`. La llamada acaba en `execute_valid_dates` solo con los T objetivo, así que llega 1 de las 6 horas y falla con `Accumulator not complete`.
+- Decisión:
+  - `src/era5_pipeline/anemoi_sources.py`: subclase de `GribSource` que pide los `valid_time` de todos los intervalos (`{i.max for i in intervals}`). Se registra como `grib-hourly-accum` en el entry point `anemoi.datasets.create.sources` de `pyproject.toml`. Nada más cambia: el emparejado de campos con intervalos y la suma los sigue haciendo `accumulate`.
+  - Rutas con patrón `data/raw/single_{date:strftime(%Y-%m)}.grib`: cada grupo mensual abre solo los meses que necesita, incluido el anterior para la ventana de 00 UTC del día 1.
+  - `dates.start: 2020-01-01T06`: la ventana de 00 UTC necesita dic-2019. Anemoi no admite huecos en `tp` (el Zarr propio lo deja como NaN, D-010).
+  - Metadatos: `licence: CC-BY-4.0` y atribución a C3S/ERA5 (Hersbach et al., 2020).
+- Alternativas descartadas: fuente `grib-index` (tendría que construir un índice SQLite, depende de `cachetools`, que no está en el entorno, y filtra por `step` igual a la longitud del intervalo, que no encaja con los pasos 5-6, 6-7… de ERA5); preagregar `tp` a 6 h con CDO y leerla con `grib` (evita `accumulate`, que es justo la parte de anemoi que interesa demostrar); fuente `xarray-zarr` sobre el Zarr propio (anemoi pasaría a ser una copia del pipeline propio y la comparación cruzada de D-005 perdería el sentido); descargar dic-2019 para empezar a 00 UTC (una petición al CDS solo para 1 paso de 4384).
+- Consecuencias: el dataset anemoi tiene 4383 pasos y el propio 4384. `accumulate` reescribe sus sumas en un GRIB temporal a 16 bits, así que `tp` difiere del Zarr propio en menos de rango/2¹⁶ en el 1 % de los puntos (máx. 9,5e-7 m); las demás variables son idénticas (`reports/anemoi_vs_zarr.md`). El plugin depende de una API interna de anemoi (`GribSource`, `Intervals`): si se sube la versión fijada (D-007), el test `test_recipe_builds_on_fixtures` lo detecta.

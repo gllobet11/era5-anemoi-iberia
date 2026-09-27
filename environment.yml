@@ -15,6 +15,9 @@ dependencies:
   - cdo
   - nco
   - anemoi-datasets=0.5.44
+  # notebooks (notebooks/, no se ejecutan en CI)
+  - ipykernel
+  - nbconvert
   # calidad
   - pytest
   - pytest-cov

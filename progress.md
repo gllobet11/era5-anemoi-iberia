@@ -13,7 +13,7 @@ No es un log de commits: una entrada por sesión, 5–15 líneas.
 | F2 Transformación | ✅ cerrada | 2026-09-25 | `iberia.zarr` 4384×41×61, 221 MB; CDO y NetCDF comparados |
 | F3 QC + tests | ✅ cerrada | 2026-09-27 | 5 checks críticos; QC real OK; cobertura qc 100 %, transform 85 % |
 | F4 CI/CD | ✅ cerrada | 2026-09-27 | CI verde en `main` (run 36304894016); repo privado hasta F8 |
-| F5 Anemoi | ⏳ | | |
+| F5 Anemoi | ✅ cerrada | 2026-09-27 | `iberia-anemoi.zarr` 4383×10×1×2501; `inspect` OK; = Zarr propio salvo cuantización de `tp` |
 | F6 Slurm (stretch) | ⏳ | | |
 | F7 CERRA (stretch) | ⏳ | | |
 | F8 Cierre | ⏳ | | |
@@ -138,3 +138,20 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 - Repo privado `gllobet11/era5-anemoi-iberia` (se hará público en F8). Primera ejecución de la CI verde: lint 7 s, test 1 min 34 s, e2e 1 min 32 s, docker 2 min 28 s.
 - Avisos no bloqueantes: `test` y `e2e` compiten por guardar la misma caché del entorno (se guarda una, esperado); acciones en Node 20 forzadas a Node 24; `ubuntu-latest` pasa a Ubuntu 26 desde el 19/10.
 **Siguiente paso:** F5 (Anemoi).
+
+### 2026-09-27 — Fase F5
+**Hecho:**
+- Spike con la receta mínima sobre ene-2020 → formato anemoi 0.21.0, zarr v2 (D-007 se mantiene). Los valores coinciden al bit con el Zarr propio.
+- `recipes/iberia.yaml` (`join` de `grib` single + pressure y `accumulate` 6 h de `tp`) y plugin `grib-hourly-accum`. Diseño → D-014.
+- `anemoi-datasets create` completo: 7 min 40 s, pico de 1,1 GB de RAM (frente a los 5,2 GB de `transform`), 231 MiB. `inspect` OK, 0 fechas faltantes → `reports/anemoi_inspect.txt`.
+- `scripts/compare_anemoi_zarr.py` → `reports/anemoi_vs_zarr.md`; la tabla está en el README.
+- `notebooks/01_open_anemoi.ipynb`, ejecutado: forma, variables, subconjunto ene-2021 `select=[2t, tp]` y mapa de `2t` durante Filomena (09/01/2021). `ipykernel` y `nbconvert` añadidos a `environment.yml`.
+- `tests/test_recipe.py`: metadatos obligatorios, variables y niveles coherentes con `configs/iberia.yaml` y un e2e que construye la receta sobre los fixtures y compara con `transform.build` (diferencia 0). 29 tests en verde. `recipes/` se copia a la imagen Docker.
+**Bugs resueltos:**
+- `Accumulator not complete` en `tp` con la fuente `grib` estándar: solo recibía la hora T de cada ventana → D-014.
+- El e2e de la receta fallaba con `could not broadcast (2665,) into (2501,)`: el fixture de presión es W−11 (se hizo así para ejercitar el recorte de `transform`) y la fuente `grib` de anemoi no recorta. Se recorta en el test con `cdo sellonlatbox`.
+**Puntos de inflexión:**
+- `tp` anemoi ≠ propio en 9,5e-7 m. Parecía un error de agregación, pero la diferencia es siempre < rango/2¹⁶ (ratio máx. 0,996): viene del GRIB temporal de 16 bits de `accumulate`. Documentado en D-014.
+- Los estadísticos que guarda anemoi (y que imprime `inspect`) cubren solo 2020-01-01 06 → 2022-05-26 12, no todo el dataset. Por eso difieren de los del QC propio, aunque los datos son los mismos.
+**Decisiones generadas:** → D-014 (D-005 → Aceptada)
+**Siguiente paso:** push y CI verde; después, F6 (Slurm, stretch), que se puede empezar porque el MVP se cierra antes del 09/10.

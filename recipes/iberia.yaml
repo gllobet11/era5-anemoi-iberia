@@ -1,0 +1,36 @@
+# Receta anemoi-datasets para ERA5 Iberia (D-014). Ejecutar desde la raíz del repo:
+#   anemoi-datasets create recipes/iberia.yaml data/zarr/iberia-anemoi.zarr
+# Mismos GRIB raw que el Zarr propio (D-005); variables y dominio de configs/iberia.yaml.
+name: era5-iberia-0p25-2020-2022-6h
+description: >-
+  ERA5 reanalysis subset over the Iberian Peninsula and Balearic Islands (N45 W-10 S35 E5),
+  0.25 deg, 6-hourly, 2020-2022. Surface 2t/10u/10v/msl/sp, 6 h accumulated tp,
+  t and z at 500/850 hPa. Built from CDS GRIB downloads.
+attribution: >-
+  Contains modified Copernicus Climate Change Service information 2026 (ERA5, Hersbach et al., 2020).
+licence: CC-BY-4.0
+
+dates:
+  # 2020-01-01T00 queda fuera: su tp necesita horas de dic-2019, que no se descargan (D-010)
+  start: 2020-01-01T06:00:00
+  end: 2022-12-31T18:00:00
+  frequency: 6h
+  group_by: monthly
+
+input:
+  join:
+    - grib:
+        path: data/raw/single_{date:strftime(%Y-%m)}.grib
+        param: [2t, 10u, 10v, msl, sp]
+    - grib:
+        path: data/raw/pressure_{date:strftime(%Y-%m)}.grib
+        param: [t, z]
+        level: [500, 850]
+    - accumulate:
+        period: 6h
+        # ERA5 HRES en el CDS: tp horaria de pasadas 06/18 UTC, pasos 0-1 ... 11-12
+        covering: {mars: {class: ea}}
+        source:
+          grib-hourly-accum:  # grib que atiende a intervalos, ver src/era5_pipeline/anemoi_sources.py
+            path: data/raw/single_{date:strftime(%Y-%m)}.grib
+            param: [tp]
