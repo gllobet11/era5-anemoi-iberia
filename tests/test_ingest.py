@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from era5_pipeline.config import load_config
-from era5_pipeline.ingest import build_request, ingest, months
+from era5_pipeline.ingest import Manifest, build_request, ingest, months
 
 ROOT = Path(__file__).parents[1]
 
@@ -84,3 +84,21 @@ def test_retries_exhausted_raises(cfg):
     with pytest.raises(ConnectionError):
         ingest(cfg, FakeClient(fail_first=99))
     assert not list(Path(cfg["paths"]["raw"]).glob("*.part"))
+
+
+def test_ingest_single_month(cfg):
+    client = FakeClient()
+    assert ingest(cfg, client, month="2020-02") == {"downloaded": 2, "skipped": 0}
+    assert {r["month"][0] for _, r in client.calls} == {"02"}
+    with pytest.raises(ValueError):
+        ingest(cfg, client, month="2021-01")
+
+
+def test_manifest_merges_concurrent_writers(tmp_path):
+    # dos tareas del job array con su propio Manifest cargado antes de que la otra escriba
+    a, b = Manifest(tmp_path / "manifest.json"), Manifest(tmp_path / "manifest.json")
+    for name in ("a.grib", "b.grib"):
+        (tmp_path / name).write_bytes(name.encode())
+    a.record("a.grib", tmp_path / "a.grib")
+    b.record("b.grib", tmp_path / "b.grib")
+    assert set(json.loads((tmp_path / "manifest.json").read_text())) == {"a.grib", "b.grib"}

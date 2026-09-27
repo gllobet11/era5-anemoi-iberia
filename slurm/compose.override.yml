@@ -1,0 +1,20 @@
+# Override para slurm-docker-cluster con la disposición de un HPC:
+#   /gpfs/projects/era5-anemoi-iberia  repo + data/ (sistema de ficheros compartido del proyecto)
+#   /gpfs/apps                         software compartido (entorno micromamba, volumen Docker)
+#   /opt/modulefiles/era5              modulefile Lmod → `module load era5` (lo crea cluster_setup.sh)
+#   /home/era5/.cdsapirc               credenciales del CDS del usuario
+# Solo ERA5_REPO (ruta del repo en el host) depende de la máquina; dentro del clúster todo es fijo.
+#   docker compose -f docker-compose.yml -f $ERA5_REPO/slurm/compose.override.yml up -d slurmctld cpu-worker
+x-era5-mounts: &era5-mounts
+  - ${ERA5_REPO:?}:/gpfs/projects/era5-anemoi-iberia
+  - gpfs_apps:/gpfs/apps
+  - ${CDSAPIRC:-${HOME}/.cdsapirc}:/home/era5/.cdsapirc:ro
+
+services:
+  slurmctld:
+    volumes: *era5-mounts
+  cpu-worker:
+    volumes: *era5-mounts
+
+volumes:
+  gpfs_apps:

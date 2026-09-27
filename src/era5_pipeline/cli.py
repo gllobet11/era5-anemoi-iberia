@@ -7,7 +7,10 @@ from era5_pipeline.config import load_config
 def main(argv=None):
     p = argparse.ArgumentParser(prog="era5_pipeline")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for cmd in ("ingest", "transform"):
+    ing = sub.add_parser("ingest")
+    ing.add_argument("--config", required=True)
+    ing.add_argument("--month", help="YYYY-MM: solo ese mes (tarea de job array)")
+    for cmd in ("transform", "months"):
         sub.add_parser(cmd).add_argument("--config", required=True)
     qc_p = sub.add_parser("qc")
     qc_p.add_argument("--zarr", required=True)
@@ -19,7 +22,11 @@ def main(argv=None):
     if args.cmd == "ingest":
         from era5_pipeline.ingest import ingest
 
-        print(ingest(cfg))
+        print(ingest(cfg, month=args.month))
+    elif args.cmd == "months":
+        from era5_pipeline.ingest import months
+
+        print("\n".join(f"{y}-{m:02d}" for y, m in months(cfg)))
     elif args.cmd == "transform":
         from era5_pipeline.transform import transform
 

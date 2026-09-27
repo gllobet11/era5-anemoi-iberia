@@ -60,3 +60,62 @@ date and variable and plots `2t`.
 `lint` (ruff) · `test` (pytest, coverage ≥ 80 % on `transform`/`qc`) · `e2e` (mocked ingest →
 transform → QC, and the anemoi recipe, on small GRIB fixtures) · `docker` (build image, run tests inside).
 CI never contacts the CDS and uses no secrets: all tests run on versioned fixtures (< 1 MB).
+
+## Running on a Slurm cluster (simulated locally)
+
+> This is **not** a real HPC run. It uses [slurm-docker-cluster](https://github.com/giovtorres/slurm-docker-cluster)
+> (Slurm 26.05 in Docker): one login/controller container and two compute containers that share the
+> same laptop CPUs and RAM. It exercises the Slurm workflow (job arrays, dependencies, per-task logs),
+> not performance or scale.
+
+`slurm/submit.sh` chains three jobs:
+
+1. `ingest_array.sbatch`: one array task per month (`--array=0-35%4`). The task maps
+   `SLURM_ARRAY_TASK_ID` to a month with `cli months`, so the period only lives in `configs/`. It then
+   runs `ingest --month YYYY-MM`. The manifest is updated under `flock`, so concurrent tasks don't
+   drop each other's entries.
+2. `transform.sbatch` (`--dependency=afterok:<array>`): one job that rebuilds the whole Zarr (Decisions D-011, D-015).
+3. `qc.sbatch` (`afterok:<transform>`): the job fails if any critical check fails.
+
+The cluster mimics a typical HPC layout, so the batch scripts carry no host-specific paths:
+
+| Path in the cluster | Role |
+|---|---|
+| `/gpfs/projects/era5-anemoi-iberia` | shared project filesystem: repo + `data/` (bind mount of the host repo) |
+| `/gpfs/apps/envs/era5` | shared software: the micromamba env built from `environment.yml` inside the cluster |
+| `module load era5` | Lmod modulefile (`/opt/modulefiles/era5/1.0.lua`) that puts the env on `PATH` |
+| `/home/era5/.cdsapirc` | the user's CDS credentials |
+
+The `.sbatch` files only run `module load era5`. On a real cluster that line becomes the site's
+module or environment, and the rest stays the same. Each job requests `--mem`, and memory is
+accounted with `jobacct_gather/linux`, so `sacct`/`sstat` report `MaxRSS`.
+
+```bash
+# once: build the cluster image (needs BuildKit, i.e. the docker buildx plugin)
+git clone https://github.com/giovtorres/slurm-docker-cluster ../slurm-docker-cluster
+cd ../slurm-docker-cluster && docker compose build slurmdbd
+
+export ERA5_REPO=$OLDPWD              # the only host-specific path
+docker compose -f docker-compose.yml -f $ERA5_REPO/slurm/compose.override.yml up -d slurmctld cpu-worker
+$ERA5_REPO/slurm/cluster_setup.sh     # user with host UID, memory accounting, env + module (idempotent)
+
+docker exec -u era5 -w /gpfs/projects/era5-anemoi-iberia slurmctld slurm/submit.sh
+docker exec slurmctld squeue          # logs: slurm/logs/{ingest_%A_%a,transform_%j,qc_%j}.out
+docker exec slurmctld sacct -o JobID,JobName,State,NodeList,Elapsed,MaxRSS
+```
+
+Result of the run on 2026-09-27:
+
+- Ingest: 36/36 array tasks completed on c1/c2, 4 at a time, 3-5 s each. All months were already
+  downloaded, so the tasks verified their checksums and skipped. In an earlier run,
+  `pressure_2022-12.grib` was removed on purpose and its task re-downloaded it from the CDS with a
+  byte-identical sha256.
+- Transform: completed in 11 min, with `MaxRSS` 5.1 GiB (vs 5.2 GB measured locally). The runtime
+  varies between runs, from 6 to 11 min, because the "nodes" share the laptop with everything else.
+- QC: passed.
+
+Memory is sampled, not enforced. `jobacct_gather/linux` reads the RSS of the job's processes from
+`/proc` every few seconds (`--acctg-freq=task=2` for transform), so a spike shorter than the interval
+is missed. With the cluster default of 30 s the reported peak was 3.7 GiB. `--mem` only drives
+scheduling here: without cgroups, nothing kills a job that exceeds it. A real HPC would use
+`task/cgroup` + `jobacct_gather/cgroup` for exact accounting and enforcement.

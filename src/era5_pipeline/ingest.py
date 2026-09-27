@@ -1,6 +1,7 @@
 """Descarga ERA5 del CDS: una petición por (mes, tipo), idempotente vía manifest + sha256."""
 
 import calendar
+import fcntl
 import hashlib
 import json
 import logging
@@ -54,7 +55,11 @@ def sha256(path: Path) -> str:
 
 
 class Manifest:
-    """manifest.json: {nombre_lógico: {path, size, sha256, downloaded_at}}. Escritura atómica."""
+    """manifest.json: {nombre_lógico: {path, size, sha256, downloaded_at}}. Escritura atómica.
+
+    Varios procesos (tareas de un job array de Slurm) pueden escribir a la vez: `record`
+    relee el fichero bajo flock y fusiona, para no perder entradas de otros procesos.
+    """
 
     def __init__(self, path: Path):
         self.path = path
@@ -69,13 +74,18 @@ class Manifest:
         return p.exists() and p.stat().st_size == e["size"] and sha256(p) == e["sha256"]
 
     def record(self, name: str, path: Path) -> None:
-        with self._lock:
-            self.entries[name] = {
-                "path": str(path),
-                "size": path.stat().st_size,
-                "sha256": sha256(path),
-                "downloaded_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            }
+        entry = {
+            "path": str(path),
+            "size": path.stat().st_size,
+            "sha256": sha256(path),
+            "downloaded_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        lock = self.path.with_suffix(".json.lock")
+        with self._lock, open(lock, "w") as lf:
+            fcntl.flock(lf, fcntl.LOCK_EX)
+            if self.path.exists():
+                self.entries.update(json.loads(self.path.read_text()))
+            self.entries[name] = entry
             tmp = self.path.with_suffix(".json.tmp")
             tmp.write_text(json.dumps(self.entries, indent=2, sort_keys=True))
             tmp.replace(self.path)
@@ -112,7 +122,8 @@ def fetch(client, cfg: dict, manifest: Manifest, kind: str, year: int, month: in
     return "downloaded"
 
 
-def ingest(cfg: dict, client=None) -> dict[str, int]:
+def ingest(cfg: dict, client=None, month: str | None = None) -> dict[str, int]:
+    """Descarga todo el periodo, o solo `month` ("YYYY-MM"; una tarea del job array, F6)."""
     if client is None:
         import cdsapi
 
@@ -124,6 +135,11 @@ def ingest(cfg: dict, client=None) -> dict[str, int]:
     ny, nm = map(int, cfg["ingest"]["netcdf_month"].split("-"))
     jobs = [(k, y, m, "grib") for y, m in months(cfg) for k in KINDS]
     jobs += [(k, ny, nm, "netcdf") for k in KINDS]
+    if month:
+        y, m = map(int, month.split("-"))
+        jobs = [j for j in jobs if j[1:3] == (y, m)]
+        if not jobs:
+            raise ValueError(f"{month} fuera del periodo de la config")
 
     with ThreadPoolExecutor(cfg["ingest"]["workers"]) as ex:
         results = list(ex.map(lambda j: fetch(client, cfg, manifest, *j), jobs))

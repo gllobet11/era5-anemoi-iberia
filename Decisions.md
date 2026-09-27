@@ -60,7 +60,7 @@ Plantilla:
 
 ## D-006 — Slurm solo como simulación local y como stretch
 - Fecha / Fase: 25/09/2026 · planificación
-- Estado: Propuesta
+- Estado: Aceptada (F6, implementación → D-015)
 - Contexto: sin acceso a HPC real; Slurm es gap esencial pero no cerrable de verdad en 2 semanas.
 - Decisión: F6 con `slurm-docker-cluster` solo si el MVP (F0–F5) está cerrado el 09/10; se etiqueta como simulación en README y CV.
 - Alternativas descartadas: omitirlo (deja el gap intacto); presentarlo como experiencia HPC (overclaiming).
@@ -104,7 +104,7 @@ Plantilla:
 
 ## D-011 — Zarr: reescritura completa atómica (tmp + rename) en vez de append/region
 - Fecha / Fase: 25/09/2026 · F2
-- Estado: Aceptada (revisar en F6)
+- Estado: Aceptada (revisada en F6: se mantiene → D-015)
 - Contexto: CLAUDE.md sugería escritura por región/append controlado. El dataset completo es < 1 GB y `tp` necesita las horas del mes anterior, así que procesar mes a mes obliga a solapar ficheros.
 - Decisión: `transform` abre todos los GRIB de forma perezosa, construye el dataset completo y lo escribe en `<zarr>.tmp` que luego reemplaza al destino (zarr v2, metadatos consolidados, chunks de `configs/`).
 - Alternativas descartadas: `append_dim="time"` (relanzar un mes duplica pasos; requiere lógica de dedupe); `region=` por mes (requiere pre-crear el store y gestionar el solape de `tp`: complejidad sin beneficio a este volumen).
@@ -146,3 +146,16 @@ Plantilla:
   - Metadatos: `licence: CC-BY-4.0` y atribución a C3S/ERA5 (Hersbach et al., 2020).
 - Alternativas descartadas: fuente `grib-index` (tendría que construir un índice SQLite, depende de `cachetools`, que no está en el entorno, y filtra por `step` igual a la longitud del intervalo, que no encaja con los pasos 5-6, 6-7… de ERA5); preagregar `tp` a 6 h con CDO y leerla con `grib` (evita `accumulate`, que es justo la parte de anemoi que interesa demostrar); fuente `xarray-zarr` sobre el Zarr propio (anemoi pasaría a ser una copia del pipeline propio y la comparación cruzada de D-005 perdería el sentido); descargar dic-2019 para empezar a 00 UTC (una petición al CDS solo para 1 paso de 4384).
 - Consecuencias: el dataset anemoi tiene 4383 pasos y el propio 4384. `accumulate` reescribe sus sumas en un GRIB temporal a 16 bits, así que `tp` difiere del Zarr propio en menos de rango/2¹⁶ en el 1 % de los puntos (máx. 9,5e-7 m); las demás variables son idénticas (`reports/anemoi_vs_zarr.md`). El plugin depende de una API interna de anemoi (`GribSource`, `Intervals`): si se sube la versión fijada (D-007), el test `test_recipe_builds_on_fixtures` lo detecta.
+
+## D-015 — Slurm: job array por mes solo en ingest; transform y QC como jobs únicos encadenados
+- Fecha / Fase: 27/09/2026 · F6
+- Estado: Aceptada
+- Contexto: F6 simula un HPC con `slurm-docker-cluster` (1 login + 2 nodos de cómputo que en realidad comparten las 4 CPU y los 12 GB del portátil). Había que decidir qué se reparte por mes, cómo llegan el código y el entorno a los nodos, y qué pasa con el manifest si varios procesos escriben a la vez.
+- Decisión:
+  - `slurm/submit.sh` encadena `ingest_array.sbatch` (`--array=0-(N-1)%4`) → `transform.sbatch` (`afterok`) → `qc.sbatch` (`afterok`). N sale de `cli months`, y cada tarea traduce `SLURM_ARRAY_TASK_ID` a su mes con el mismo subcomando: el periodo sigue viviendo solo en `configs/`. `%4` es el mismo límite de peticiones simultáneas al CDS que `workers` (D-009).
+  - `ingest --month YYYY-MM` filtra los trabajos de un mes (incluido el NetCDF si toca). `Manifest.record` relee `manifest.json` bajo `fcntl.flock` y fusiona antes de escribir: el `threading.Lock` anterior solo protegía entre hilos de un mismo proceso, y dos tareas del array perdían las entradas de la otra.
+  - Transform sigue siendo un único job con reescritura completa (D-011 se mantiene): la ventana de `tp` de 00 UTC necesita el mes anterior, el paso dura minutos y los nodos simulados comparten las mismas CPU, así que partirlo por mes con `region=` añade complejidad sin ganar nada medible.
+  - Disposición de HPC con rutas fijas dentro del clúster (`slurm/compose.override.yml`): el repo en `/gpfs/projects/era5-anemoi-iberia` (bind mount; es la única ruta que depende del host), el entorno en `/gpfs/apps/envs/era5` (volumen compartido; `slurm/cluster_setup.sh` lo construye con micromamba desde `environment.yml`) y un modulefile Lmod `era5`. Los `.sbatch` solo hacen `module load era5`. Las rutas del manifest son relativas al repo, así que valen igual en el host y en el clúster. Los jobs corren con el UID del host para no dejar ficheros de root en `data/`.
+  - Memoria: `cluster_setup.sh` activa `JobAcctGatherType=jobacct_gather/linux`, que viene sin definir en la imagen, y cada job pide `--mem`. Sin `--mem`, con `CR_CORE_MEMORY` y `DefMemPerNode=UNLIMITED`, cada tarea de ingest reservaba el nodo entero (11963M) y solo corrían 2 de las 4 permitidas.
+- Alternativas descartadas: array también en transform con `region=` sobre un store precreado (solape de `tp` y precreación del store, sin ganancia en un solo host); montar el entorno del host en su misma ruta absoluta (primera versión de F6: funcionaba, pero ataba los scripts a rutas y glibc del portátil); construir el entorno dentro de la imagen del clúster (otra build de ~2 GB que duplica el `Dockerfile` del proyecto; en un HPC el software vive en el sistema de ficheros compartido, no en la imagen del nodo); Apptainer en los nodos (la imagen lo trae, pero habría que convertir la imagen Docker y montar igualmente los datos: más pasos para el mismo resultado); un manifest por mes (cambia el formato que ya usan transform, los tests y la receta).
+- Consecuencias: pasar los scripts a un HPC real exige cambiar solo `module load era5` (y la ruta del proyecto desde la que se lanza `submit.sh`). El entorno del clúster (2,2 GB) se construye una vez y sobrevive a `compose down`, porque está en un volumen; `compose down -v` lo borra. `slurm-docker-cluster` necesita BuildKit (`COPY --chmod`): sin el plugin buildx, `docker compose build` falla.

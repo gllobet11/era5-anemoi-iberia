@@ -156,3 +156,25 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 **Decisiones generadas:** → D-014 (D-005 → Aceptada)
 - CI verde en `main` (run 36306566196): lint 4 s, test 2 min 7 s, e2e 1 min 44 s, docker 2 min 45 s.
 **Siguiente paso:** F6 (Slurm, stretch), que se puede empezar porque el MVP se cierra antes del 09/10.
+
+### 2026-09-27 — Fase F6
+**Hecho:**
+- Clúster local con `slurm-docker-cluster` (Slurm 26.05.2, commit cf399c5, clonado en `../slurm-docker-cluster`): `slurmctld` + 2 nodos `c1`/`c2` (4 CPU y 12 GB cada uno según `sinfo`, compartidos con el host).
+- Disposición de HPC → D-015: repo en `/gpfs/projects/era5-anemoi-iberia`, entorno en `/gpfs/apps/envs/era5` (construido en el clúster desde `environment.yml`, 2,2 GB) y `module load era5` (Lmod). `slurm/compose.override.yml` + `slurm/cluster_setup.sh` (idempotente).
+- `slurm/ingest_array.sbatch`, `transform.sbatch`, `qc.sbatch` y `submit.sh` (cadena con `afterok`).
+- `cli ingest --month YYYY-MM` y `cli months`. `Manifest.record` con `flock` y relectura del fichero. 2 tests nuevos: filtro por mes y dos escritores con manifests cargados por separado.
+- Primera ejecución (con el entorno del host montado): 36/36 tareas. `pressure_2022-12.grib` se apartó a propósito: su tarea lo volvió a descargar del CDS (servido desde la caché, 1 s) con el mismo sha256.
+- Ejecución final (disposición `/gpfs`, jobs 42-44): array 36/36 COMPLETED, 4 tareas simultáneas, 3-5 s cada una. Transform: 10 min 58 s, `MaxRSS` 5,1 GiB (5,2 GB en local, F2). QC OK. Todos los ficheros son del UID del host.
+- README: sección "Running on a Slurm cluster (simulated locally)".
+**Bugs resueltos:**
+- Condición de carrera latente en el manifest: con varios procesos escribiendo, cada `record` sobrescribía el fichero con su copia en memoria y borraba las entradas de las otras tareas → D-015.
+- `MaxRSS` vacío: la imagen trae `JobAcctGatherType` sin definir. `cluster_setup.sh` pone `jobacct_gather/linux`, y cambiar el plugin exige reiniciar los demonios (no basta `scontrol reconfigure`).
+- Solo corrían 2 tareas de ingest a la vez aunque el límite era 4: sin `--mem`, cada tarea reservaba el nodo entero (`CR_CORE_MEMORY` + `DefMemPerNode=UNLIMITED`). Solución: `--mem` en cada sbatch.
+- `docker compose build` del clúster fallaba sin BuildKit: primero por `TARGETARCH` vacío y después por `COPY --chmod`. Se instaló el plugin `docker-buildx` v0.37.1 en `~/.docker/cli-plugins`.
+- Un worker muere en 1 s al recrear el clúster: el entrypoint deduce el número de réplica consultando el DNS de Docker, y si el otro worker aún no está registrado, `set -e` lo tumba. `cluster_setup.sh` hace `docker start` de todos los workers.
+- Modulefile vacío: `docker exec` sin `-i` no pasa el heredoc por stdin.
+**Puntos de inflexión:**
+- La memoria se muestrea, no se aplica como límite: con el intervalo por defecto de 30 s el pico salía en 3,7 GiB; con `--acctg-freq=task=2`, 5,1 GiB. Sin cgroups, `--mem` solo sirve para planificar.
+- La duración de transform varía entre ejecuciones (de 5 min 53 s a 10 min 58 s) porque los nodos comparten el portátil con el resto de procesos: no es un benchmark.
+**Decisiones generadas:** → D-015 (D-006 → Aceptada; D-011 revisada, se mantiene)
+**Siguiente paso:** F7 (CERRA, stretch) o F8 (cierre).
