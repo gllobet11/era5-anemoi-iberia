@@ -12,7 +12,7 @@ No es un log de commits: una entrada por sesión, 5–15 líneas.
 | F1 Ingesta | ✅ cerrada | 2026-09-25 | 74/74 ficheros, 875 MB; relanzar = 0 descargas |
 | F2 Transformación | ✅ cerrada | 2026-09-25 | `iberia.zarr` 4384×41×61, 221 MB; CDO y NetCDF comparados |
 | F3 QC + tests | ✅ cerrada | 2026-09-27 | 5 checks críticos; QC real OK; cobertura qc 100 %, transform 85 % |
-| F4 CI/CD | 🔄 en curso | | Todo verde en local; falta el repo en GitHub para validar la CI |
+| F4 CI/CD | ✅ cerrada | 2026-09-27 | CI verde en `main` (run 36304894016); repo privado hasta F8 |
 | F5 Anemoi | ⏳ | | |
 | F6 Slurm (stretch) | ⏳ | | |
 | F7 CERRA (stretch) | ⏳ | | |
@@ -135,4 +135,6 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 - `docker build` fallaba en el `pip install -e .` del `environment.yml`: `WORKDIR /app` crea el directorio como root y micromamba (usuario `mambauser`) no puede escribir su requirements temporal → `COPY --chown … /app/` antes de `WORKDIR`.
 **Puntos de inflexión:** ninguno.
 **Decisiones generadas:** → D-013
-**Siguiente paso:** crear el repo en GitHub, hacer push y confirmar la CI verde en `main`; entonces cerrar F4 y pasar a F5 (Anemoi).
+- Repo privado `gllobet11/era5-anemoi-iberia` (se hará público en F8). Primera ejecución de la CI verde: lint 7 s, test 1 min 34 s, e2e 1 min 32 s, docker 2 min 28 s.
+- Avisos no bloqueantes: `test` y `e2e` compiten por guardar la misma caché del entorno (se guarda una, esperado); acciones en Node 20 forzadas a Node 24; `ubuntu-latest` pasa a Ubuntu 26 desde el 19/10.
+**Siguiente paso:** F5 (Anemoi).
