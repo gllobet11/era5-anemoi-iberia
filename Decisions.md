@@ -109,3 +109,16 @@ Plantilla:
 - Decisión: `transform` abre todos los GRIB de forma perezosa, construye el dataset completo y lo escribe en `<zarr>.tmp` que luego reemplaza al destino (zarr v2, metadatos consolidados, chunks de `configs/`).
 - Alternativas descartadas: `append_dim="time"` (relanzar un mes duplica pasos; requiere lógica de dedupe); `region=` por mes (requiere pre-crear el store y gestionar el solape de `tp`: complejidad sin beneficio a este volumen).
 - Consecuencias: relanzar reconstruye todo (segundos-minutos para 3 años). Si en F6 se paraleliza por mes con Slurm, pasar a `region=` con store precreado.
+
+## D-012 — QC: 5 checks críticos, umbrales en config, unidades desde `transform.CF`
+- Fecha / Fase: 27/09/2026 · F3
+- Estado: Aceptada
+- Contexto: el QC tiene que fallar (exit ≠ 0) ante datos corruptos sin dar falsos positivos con el NaN esperado de `tp` en el primer paso (D-010), y los umbrales no pueden estar en el código (regla 5 de CLAUDE.md).
+- Decisión:
+  - Checks: timesteps esperados (desde `period` + `frequency`) frente a presentes, extra y duplicados; coordenadas estrictamente crecientes; unidades y variables presentes; % NaN; rangos físicos. **Todos críticos**: con que falle uno, `passed=False` y exit 1. Los estadísticos (media, std, min, max; `t`/`z` por nivel) son informativos.
+  - `configs/iberia.yaml → qc`: `max_nan_pct` (0), `leading_nan_steps` (`tp: 1`) y `ranges` por variable en unidades nativas. Los rangos de `t`/`z` son uno por variable, no uno por nivel.
+  - Unidades esperadas = `transform.CF`, que es la fuente de verdad del esquema, sin copiarlas en la config.
+  - El NaN se exime por **posición** (primeros N pasos de la variable), no con un % global: un NaN en cualquier otro sitio falla aunque el % sea minúsculo (1 paso = 0,023 % del periodo).
+  - Informe `reports/qc_<fecha de ejecución>.{json,md}`.
+- Alternativas descartadas: niveles warning/critical (ningún check actual justifica solo avisar); `max_nan_pct` > 0 para absorber el NaN de `tp` (ocultaría huecos reales); unidades duplicadas en config (dos fuentes de verdad); rangos por nivel (más config sin un caso que lo pida; un swap de niveles lo detectarían los estadísticos por nivel).
+- Consecuencias: el QC carga el Zarr entero (0,8 GB de pico, 6,5 s). Si crece el dominio o el periodo, reducir por chunks.

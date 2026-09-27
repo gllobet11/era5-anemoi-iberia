@@ -42,3 +42,18 @@ ingest:
   retries: 3
   backoff_s: 60             # espera = backoff_s * 2**intento
   workers: 4                # peticiones simultáneas al CDS (la cola es el cuello de botella)
+
+qc:
+  reports: reports
+  max_nan_pct: 0.0            # % NaN tolerado por variable, tras la exención de abajo
+  leading_nan_steps:          # pasos iniciales en los que NaN es esperado
+    tp: 1                     # 2020-01-01 00 UTC necesita horas de dic-2019 (D-010)
+  ranges:                     # [min, max] plausibles para Iberia, unidades nativas ERA5 (D-010)
+    t2m: [230, 330]           # K
+    u10: [-50, 50]            # m s-1
+    v10: [-50, 50]
+    msl: [94000, 106000]      # Pa
+    sp: [60000, 106000]       # Pa (orografía ERA5 hasta ~2500 m)
+    tp: [0, 0.3]              # m en 6 h
+    t: [180, 320]             # K, 500 y 850 hPa
+    z: [5000, 65000]          # m2 s-2, 850 hPa ~1,5 km y 500 hPa ~5,5 km

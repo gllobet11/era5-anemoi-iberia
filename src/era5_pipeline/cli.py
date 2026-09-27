@@ -9,6 +9,9 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
     for cmd in ("ingest", "transform"):
         sub.add_parser(cmd).add_argument("--config", required=True)
+    qc_p = sub.add_parser("qc")
+    qc_p.add_argument("--zarr", required=True)
+    qc_p.add_argument("--config", default="configs/iberia.yaml")
     args = p.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -21,7 +24,14 @@ def main(argv=None):
         from era5_pipeline.transform import transform
 
         print(transform(cfg))
+    elif args.cmd == "qc":
+        from era5_pipeline.qc import qc
+
+        report = qc(args.zarr, cfg)
+        failed = [k for k, c in report["checks"].items() if not c["passed"]]
+        print(f"QC {'OK' if report['passed'] else 'FALLA'}: {failed or 'todos los checks pasan'}")
+        return 0 if report["passed"] else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

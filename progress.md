@@ -11,7 +11,7 @@ No es un log de commits: una entrada por sesión, 5–15 líneas.
 | F0 Setup | ✅ cerrada | 2026-09-25 | 1 mes (ene-2020 single levels) vía web |
 | F1 Ingesta | ✅ cerrada | 2026-09-25 | 74/74 ficheros, 875 MB; relanzar = 0 descargas |
 | F2 Transformación | ✅ cerrada | 2026-09-25 | `iberia.zarr` 4384×41×61, 221 MB; CDO y NetCDF comparados |
-| F3 QC + tests | ⏳ | | |
+| F3 QC + tests | ✅ cerrada | 2026-09-27 | 5 checks críticos; QC real OK; cobertura qc 100 %, transform 85 % |
 | F4 CI/CD | ⏳ | | |
 | F5 Anemoi | ⏳ | | |
 | F6 Slurm (stretch) | ⏳ | | |
@@ -109,3 +109,16 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 - Pico de 5,2 GB de RAM para 875 MB de GRIB: cfgrib materializa `tp` al apilar `(time, step)` y el concat carga cada mes. Techo conocido; si el dominio/periodo crece, abrir con `chunks={}` o procesar por año.
 **Decisiones generadas:** D-002 y D-008 → Aceptadas.
 **Siguiente paso:** F3 (QC + tests, cobertura ≥ 80 % en transform/qc).
+
+### 2026-09-27 — Fase F3
+**Hecho:**
+- `qc.py`: checks de tiempo, coordenadas monótonas, unidades, NaN y rangos, más estadísticos por variable/nivel. Informe `reports/qc_<fecha>.{json,md}`. CLI `qc --zarr … [--config]` con exit 1 si falla algo. Diseño → D-012.
+- Sección `qc` en `configs/iberia.yaml` (umbrales, exención de NaN de `tp`, rangos).
+- `tests/test_qc.py`: dataset sintético válido, un test por check, inyección combinada de fallos (NaN + timestep eliminado + unidad errónea → fallan exactamente `time`, `nan` y `units`) y e2e GRIB fixture → `build` → Zarr → CLI (detecta solo el paso de 18 UTC que falta en el fixture). El test de conservación de la suma de `tp` ya existía (`test_tp_6h_window_is_right_closed`). 26 tests en verde.
+- Cobertura: `qc` 100 %, `transform` 85 % (sin cubrir solo `transform()`, que lee `data/raw`).
+- QC sobre `iberia.zarr` real: todo OK, 4384/4384 pasos, 0 % NaN tras la exención, todas las variables dentro de rango. 6,5 s, 0,8 GB.
+**Bugs resueltos:** ninguno.
+**Puntos de inflexión:**
+- `test_cli_tools` falla si se ejecuta el Python del entorno sin activarlo (`cdo` no está en PATH): usar `mamba run -n era5 pytest` o activar el entorno. Relevante para la CI (F4).
+**Decisiones generadas:** → D-012
+**Siguiente paso:** F4 (CI/CD). Resolver antes `master` frente a `main` como rama por defecto.
