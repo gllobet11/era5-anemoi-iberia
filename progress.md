@@ -12,7 +12,7 @@ No es un log de commits: una entrada por sesión, 5–15 líneas.
 | F1 Ingesta | ✅ cerrada | 2026-09-25 | 74/74 ficheros, 875 MB; relanzar = 0 descargas |
 | F2 Transformación | ✅ cerrada | 2026-09-25 | `iberia.zarr` 4384×41×61, 221 MB; CDO y NetCDF comparados |
 | F3 QC + tests | ✅ cerrada | 2026-09-27 | 5 checks críticos; QC real OK; cobertura qc 100 %, transform 85 % |
-| F4 CI/CD | ⏳ | | |
+| F4 CI/CD | 🔄 en curso | | Todo verde en local; falta el repo en GitHub para validar la CI |
 | F5 Anemoi | ⏳ | | |
 | F6 Slurm (stretch) | ⏳ | | |
 | F7 CERRA (stretch) | ⏳ | | |
@@ -122,3 +122,17 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 - `test_cli_tools` falla si se ejecuta el Python del entorno sin activarlo (`cdo` no está en PATH): usar `mamba run -n era5 pytest` o activar el entorno. Relevante para la CI (F4).
 **Decisiones generadas:** → D-012
 **Siguiente paso:** F4 (CI/CD). Resolver antes `master` frente a `main` como rama por defecto.
+
+### 2026-09-27 — Fase F4
+**Hecho:**
+- Rama `master` → `main`.
+- `.github/workflows/ci.yml` con los jobs `lint`, `test`, `e2e` y `docker`. Diseño → D-013.
+- `tests/test_e2e.py` (marker `e2e`): ingesta con `FixtureClient` (idempotente: la 2ª pasada da 4 skipped), CLI `transform` → Zarr 3×41×61×2, CLI `qc` → exit 1 solo por el paso de 18 UTC que falta en el fixture. Sustituye al e2e parcial de `test_qc.py`.
+- `Dockerfile` (micromamba 2.3.2) + `.dockerignore`: construye en ~2,5 min, 1,9 GB, 26 tests pasan dentro.
+- `README.md` mínimo con badge (el completo, en inglés, en F8).
+- Local: 26 passed; cobertura qc 100 %, transform 99 %; ruff limpio.
+**Bugs resueltos:**
+- `docker build` fallaba en el `pip install -e .` del `environment.yml`: `WORKDIR /app` crea el directorio como root y micromamba (usuario `mambauser`) no puede escribir su requirements temporal → `COPY --chown … /app/` antes de `WORKDIR`.
+**Puntos de inflexión:** ninguno.
+**Decisiones generadas:** → D-013
+**Siguiente paso:** crear el repo en GitHub, hacer push y confirmar la CI verde en `main`; entonces cerrar F4 y pasar a F5 (Anemoi).

@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Ningún job accede al CDS ni usa secretos (D-004): solo fixtures versionados.
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.13.0"  # misma que .pre-commit-config.yaml
+      - run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}  # login shell: activa el entorno (cdo/ncks en PATH)
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+      - run: pytest -q --cov=era5_pipeline.transform --cov=era5_pipeline.qc --cov-report=term-missing --cov-fail-under=80
+
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+      - name: ingest (mock) -> transform -> qc sobre fixtures
+        run: pytest -v -m e2e
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t era5-pipeline .
+      - name: tests dentro de la imagen
+        run: docker run --rm era5-pipeline pytest -q

@@ -1,0 +1,10 @@
+data/
+reports/
+.git/
+.github/
+.serena/
+.vscode/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage

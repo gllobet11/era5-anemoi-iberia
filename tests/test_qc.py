@@ -1,12 +1,9 @@
-import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 import xarray as xr
 
-from era5_pipeline import cli
 from era5_pipeline.config import load_config
 from era5_pipeline.qc import (
     check_monotonic,
@@ -17,10 +14,9 @@ from era5_pipeline.qc import (
     run_qc,
     stats,
 )
-from era5_pipeline.transform import CF, build, write_zarr
+from era5_pipeline.transform import CF
 
 ROOT = Path(__file__).parents[1]
-FIX = ROOT / "tests/fixtures"
 BASE = load_config(ROOT / "configs/iberia.yaml")
 CFG = BASE | {"period": {"start": "2020-01-01", "end": "2020-01-01"}}  # 4 pasos de 6 h
 # valor plausible (dentro de rango) por variable
@@ -111,25 +107,3 @@ def test_injected_faults_are_all_detected():
     failed = {k for k, c in r["checks"].items() if not c["passed"]}
     assert failed == {"time", "nan", "units"}
     assert r["checks"]["time"]["missing"] == ["2020-01-01 12:00:00"]
-
-
-@pytest.fixture(scope="module")
-def fixture_zarr(tmp_path_factory):
-    ds = build([FIX / "single_2020-01.grib"], [FIX / "pressure_2020-01.grib"], BASE)
-    path = tmp_path_factory.mktemp("z") / "fix.zarr"
-    write_zarr(ds, path)
-    return path
-
-
-def test_e2e_cli_on_fixture(fixture_zarr, tmp_path):
-    # el fixture GRIB cubre 00-12 UTC del 01-01: solo falta el paso de 18 UTC
-    cfg = CFG | {"qc": BASE["qc"] | {"reports": str(tmp_path)}}
-    cfg_path = tmp_path / "cfg.json"  # JSON es YAML válido
-    cfg_path.write_text(json.dumps(cfg))
-    assert cli.main(["qc", "--zarr", str(fixture_zarr), "--config", str(cfg_path)]) == 1
-
-    (report_json,) = tmp_path.glob("qc_*.json")
-    r = json.loads(report_json.read_text())
-    failed = {k for k, c in r["checks"].items() if not c["passed"]}
-    assert failed == {"time"} and r["checks"]["time"]["missing"] == ["2020-01-01 18:00:00"]
-    assert (tmp_path / report_json.name.replace(".json", ".md")).read_text().startswith("# QC")

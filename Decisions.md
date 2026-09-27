@@ -122,3 +122,15 @@ Plantilla:
   - Informe `reports/qc_<fecha de ejecución>.{json,md}`.
 - Alternativas descartadas: niveles warning/critical (ningún check actual justifica solo avisar); `max_nan_pct` > 0 para absorber el NaN de `tp` (ocultaría huecos reales); unidades duplicadas en config (dos fuentes de verdad); rangos por nivel (más config sin un caso que lo pida; un swap de niveles lo detectarían los estadísticos por nivel).
 - Consecuencias: el QC carga el Zarr entero (0,8 GB de pico, 6,5 s). Si crece el dominio o el periodo, reducir por chunks.
+
+## D-013 — CI: 4 jobs, entorno micromamba cacheado, cobertura sobre la suite completa
+- Fecha / Fase: 27/09/2026 · F4
+- Estado: Aceptada
+- Contexto: la CI debe usar el mismo `environment.yml` que local y Docker (D-003), no tocar el CDS (D-004) y verificar la cobertura ≥ 80 % en `transform`/`qc`.
+- Decisión:
+  - `lint`: `ruff-action` con la versión fijada en `.pre-commit-config.yaml` (0.13.0), sin crear el entorno conda (segundos en vez de minutos).
+  - `test`: `setup-micromamba` con `cache-environment` y shell de login (`bash -el`) para tener `cdo`/`ncks` en PATH. Ejecuta **toda** la suite, e2e incluido, con `--cov-fail-under=80` sobre `transform` y `qc`.
+  - `e2e`: solo `pytest -m e2e` (ingesta con cliente falso que copia los fixtures → CLI `transform` → CLI `qc`). Duplica ~2 s del job `test`, pero deja el pipeline visible como paso propio.
+  - `docker`: `docker build` + `pytest` dentro de la imagen, sin push. Base `mambaorg/micromamba:2.3.2` fijada.
+- Alternativas descartadas: cobertura solo en unit tests (`qc()` y `to_markdown` solo se ejercitan en el e2e: 79,6 %); ruff del entorno conda en `lint` (versión no fijada, distinta de la de pre-commit); push de la imagen a un registry (nadie la consume); caché de capas Docker en GHA (optimización sin necesidad demostrada).
+- Consecuencias: el job `docker` resuelve el entorno desde cero en cada ejecución (~2,5 min en local). La imagen pesa 1,9 GB. Las versiones no fijadas de `environment.yml` pueden cambiar entre ejecuciones de CI: si rompe algo, fijar o generar un lock.
