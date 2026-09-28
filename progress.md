@@ -187,6 +187,7 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 - `cdo remapcon` → `data/zarr/cerra_iberia.zarr` (124×41×61, 1,5 MB), en la misma rejilla que el Zarr ERA5.
 - `reports/cerra_vs_era5.md` + `cerra_vs_era5_2t.png`: 2t con bias −0,39 K, RMSE 1,38 K y correlación espacial 0,991.
 - `tests/test_cerra.py`: identidad de `remapcon` sobre la propia rejilla ERA5 y petición sin `area`.
+- La imagen Docker copia también `scripts/`, que ahora importa `test_cerra.py`.
 **Bugs resueltos:**
 - CDO escribe `2t` con una dimensión `height` de tamaño 1 (2 m) → `squeeze`.
 **Puntos de inflexión:**

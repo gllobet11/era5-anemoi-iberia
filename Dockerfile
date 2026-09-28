@@ -7,6 +7,7 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER src ./src
 RUN micromamba install -y -n base -f environment.yml && micromamba clean -afy
 COPY --chown=$MAMBA_USER:$MAMBA_USER configs ./configs
 COPY --chown=$MAMBA_USER:$MAMBA_USER recipes ./recipes
+COPY --chown=$MAMBA_USER:$MAMBA_USER scripts ./scripts
 COPY --chown=$MAMBA_USER:$MAMBA_USER tests ./tests
 # el entrypoint de la imagen base activa el entorno; datos y ~/.cdsapirc se montan en ejecución
 CMD ["python", "-m", "era5_pipeline.cli", "--help"]
