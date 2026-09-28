@@ -57,3 +57,13 @@ qc:
     tp: [0, 0.3]              # m en 6 h
     t: [180, 320]             # K, 500 y 850 hPa
     z: [5000, 65000]          # m2 s-2, 850 hPa ~1,5 km y 500 hPa ~5,5 km
+
+cerra:                        # F7: 1 mes de CERRA para comparar con ERA5 (D-016)
+  dataset: reanalysis-cerra-single-levels
+  month: "2021-01"            # Filomena, el mismo mes que el notebook de F5
+  hours: ["00:00", "06:00", "12:00", "18:00"]
+  variables:                  # nombre corto ERA5: nombre CDS
+    2t: 2m_temperature
+    msl: mean_sea_level_pressure
+  raw: data/raw/cerra
+  zarr: data/zarr/cerra_iberia.zarr

@@ -179,3 +179,17 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 **Decisiones generadas:** → D-015 (D-006 → Aceptada; D-011 revisada, se mantiene)
 - CI verde en `main` (run 36310772970): lint 8 s, test 31 s, e2e 32 s, docker 2 min 37 s.
 **Siguiente paso:** F7 (CERRA, stretch) o F8 (cierre). Clúster: `docker compose down` en `../slurm-docker-cluster` (el volumen `gpfs_apps` conserva el entorno).
+
+### 2026-09-28 — Fase F7
+**Hecho:**
+- `scripts/cerra.py` (download / regrid / compare / all) y la sección `cerra:` de `configs/iberia.yaml`. CERRA 2021-01, `2t` + `msl`, 00/06/12/18 UTC. Diseño → D-016.
+- Descarga: 5 min en total, de ellos 4 en cola; 541 MB para el dominio completo, porque el CDS no recorta CERRA. Licencia ya aceptada.
+- `cdo remapcon` → `data/zarr/cerra_iberia.zarr` (124×41×61, 1,5 MB), en la misma rejilla que el Zarr ERA5.
+- `reports/cerra_vs_era5.md` + `cerra_vs_era5_2t.png`: 2t con bias −0,39 K, RMSE 1,38 K y correlación espacial 0,991.
+- `tests/test_cerra.py`: identidad de `remapcon` sobre la propia rejilla ERA5 y petición sin `area`.
+**Bugs resueltos:**
+- CDO escribe `2t` con una dimensión `height` de tamaño 1 (2 m) → `squeeze`.
+**Puntos de inflexión:**
+- `remapbil` frente a `remapcon`: al agregar de 5,5 a 25 km, el método cambia el RMSE frente a ERA5 (1,54 → 1,39 K) → D-016.
+**Decisiones generadas:** → D-016
+**Siguiente paso:** F8 (cierre).

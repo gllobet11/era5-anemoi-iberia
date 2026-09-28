@@ -119,3 +119,28 @@ Memory is sampled, not enforced. `jobacct_gather/linux` reads the RSS of the job
 is missed. With the cluster default of 30 s the reported peak was 3.7 GiB. `--mem` only drives
 scheduling here: without cgroups, nothing kills a job that exceeds it. A real HPC would use
 `task/cgroup` + `jobacct_gather/cgroup` for exact accounting and enforcement.
+
+## CERRA vs ERA5 (one month)
+
+[CERRA](https://cds.climate.copernicus.eu/datasets/reanalysis-cerra-single-levels) is the C3S
+European regional reanalysis at 5.5 km. It uses a Lambert conformal grid (1069×1069 points, standard
+parallel 50°N, central meridian 8°E): `x`/`y` are metres on the projected plane and latitude/longitude
+are 2D fields, so it cannot be sliced by lat/lon like ERA5. The CDS does not crop CERRA, so every
+request returns the full European domain.
+
+`scripts/cerra.py all` downloads January 2021 (`2t`, `msl`, 6-hourly analyses, 541 MB). It then
+regrids it with `cdo remapcon` onto the project's 0.25° ERA5 grid, writes
+`data/zarr/cerra_iberia.zarr` and compares it with ERA5 (Decisions D-016). Conservative remapping is
+used because going from 5.5 to 25 km means aggregating ~20 CERRA points per ERA5 cell. Bilinear
+remapping samples only 4 of them, and raises the 2t RMSE against ERA5 from 1.39 to 1.54 K.
+
+| CERRA − ERA5, 2021-01 | mean bias | RMSE | spatial corr. (monthly mean) |
+|---|---|---|---|
+| 2t | −0.39 K | 1.38 K | 0.991 |
+| msl | −14 Pa | 58 Pa | 0.993 |
+
+![CERRA vs ERA5 2t](reports/cerra_vs_era5_2t.png)
+
+CERRA is 1-2 K colder over the interior of the peninsula. This month includes storm Filomena; the
+link to better-resolved cold pools and snow cover at 5.5 km is a hypothesis, not something tested
+here. This is a one-month side study: the CERRA Zarr is not part of the QC, CI or anemoi dataset.
