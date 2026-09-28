@@ -193,4 +193,5 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 **Puntos de inflexión:**
 - `remapbil` frente a `remapcon`: al agregar de 5,5 a 25 km, el método cambia el RMSE frente a ERA5 (1,54 → 1,39 K) → D-016.
 **Decisiones generadas:** → D-016
+- CI verde en `main` (run 36439364248): lint 9 s, test 32 s, e2e 54 s, docker 2 min 45 s. La primera ejecución (36438988827) falló en `docker`: la imagen no copiaba `scripts/`.
 **Siguiente paso:** F8 (cierre).
