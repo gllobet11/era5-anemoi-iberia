@@ -8,7 +8,7 @@ on:
 # Ningún job accede al CDS ni usa secretos (D-004): solo fixtures versionados.
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # fijado: ubuntu-latest pasa a 26 el 19/10
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/ruff-action@v3
@@ -17,7 +17,7 @@ jobs:
       - run: ruff format --check .
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # fijado: ubuntu-latest pasa a 26 el 19/10
     defaults:
       run:
         shell: bash -el {0}  # login shell: activa el entorno (cdo/ncks en PATH)
@@ -30,7 +30,7 @@ jobs:
       - run: pytest -q --cov=era5_pipeline.transform --cov=era5_pipeline.qc --cov-report=term-missing --cov-fail-under=80
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # fijado: ubuntu-latest pasa a 26 el 19/10
     defaults:
       run:
         shell: bash -el {0}
@@ -44,7 +44,7 @@ jobs:
         run: pytest -v -m e2e
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # fijado: ubuntu-latest pasa a 26 el 19/10
     steps:
       - uses: actions/checkout@v5
       - run: docker build -t era5-pipeline .
