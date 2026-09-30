@@ -195,3 +195,12 @@ Leyenda: ⏳ pendiente · 🔄 en curso · ✅ cerrada · ⛔ bloqueada · ⏭�
 **Decisiones generadas:** → D-016
 - CI verde en `main` (run 36439364248): lint 9 s, test 32 s, e2e 54 s, docker 2 min 45 s. La primera ejecución (36438988827) falló en `docker`: la imagen no copiaba `scripts/`.
 **Siguiente paso:** F8 (cierre).
+
+### 2026-09-30 — Fase F8
+**Hecho:**
+- README en inglés completo: motivación, diagrama, decisiones clave (→ D-002, D-004, D-005, D-007, D-009, D-010, D-011), QC, limitaciones y próximos pasos. `LICENSE` MIT.
+- `master_cv.md` actualizado (proyecto propio; Slurm como simulado; gap de "un solo proyecto de datos meteorológicos").
+- Última ejecución completa desde el entorno `era5`: 33 tests, ruff y format OK; ingest 0 descargas / 74 omitidos; transform 4 min; QC OK con informe idéntico al del 27/09; `anemoi-datasets create --overwrite` + `inspect` OK (4383 × 10 × 1 × 2501, 231 MiB).
+- Borrado de `~/proyectos/slurm-docker-cluster` (clon externo de F6) y de sus 9 volúmenes Docker, incluido `gpfs_apps` con el entorno del clúster (2,2 GB). Sigue la imagen `slurm-docker-cluster:26.05.2` (1,6 GB) y el plugin `docker-buildx` en `~/.docker/cli-plugins`.
+**Consecuencia:** la sección Slurm del README ya no se reproduce sin volver a clonar `giovtorres/slurm-docker-cluster` (commit cf399c5) y reconstruir el entorno; los resultados documentados son del 27/09.
+**Bugs resueltos:** el primer intento de la ejecución final no corrió nada por usar `micromamba`, que no está en el PATH del shell no interactivo (el entorno es `~/miniforge3/envs/era5`).
