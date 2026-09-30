@@ -6,8 +6,28 @@ Reproducible pipeline that downloads a regional ERA5 subset (Iberian Peninsula, 
 from the Copernicus CDS, converts GRIB to Zarr with Xarray/CDO, runs quality checks, and builds an
 [anemoi-datasets](https://anemoi.readthedocs.io/projects/datasets/) dataset from the same raw GRIB.
 
-> Work in progress. Full documentation (architecture, decisions, limitations) comes at the end of
-> the project; design decisions are logged in `Decisions.md` (Spanish).
+**Why.** Data-driven weather models (e.g. AIFS) train on regional or global reanalysis stored as
+chunked Zarr. This repo is the data-engineering side of that: getting ERA5 from GRIB/NetCDF to an
+analysis-ready, checked, training-ready dataset, reproducibly. **It does not train or evaluate any model.**
+
+```
+CDS API ──ingest──▶ data/raw/*.grib + manifest.json (sha256)
+                        │
+          ┌─────────────┴──────────────┐
+      transform (Xarray)          anemoi-datasets create
+          │                       (recipes/iberia.yaml)
+   data/zarr/iberia.zarr          data/zarr/iberia-anemoi.zarr
+          │                              │
+         qc ──▶ reports/qc_*.{json,md}   └─▶ compared with the own Zarr
+```
+
+| Item | Value |
+|---|---|
+| Domain | N 45, W −10, S 35, E 5 (0.25°, 41 × 61 points) |
+| Period / step | 2020-01 → 2022-12, 6 h (4384 timesteps) |
+| Variables | `2t`, `10u`, `10v`, `msl`, `tp`, `sp`; `t`, `z` at 500 and 850 hPa |
+| Raw format | GRIB (canonical); one month also as NetCDF for comparison |
+| Tools | Python 3.11, Xarray/cfgrib, CDO, NCO, Zarr v2, anemoi-datasets 0.5.44 |
 
 ## Quick start
 
@@ -144,3 +164,47 @@ remapping samples only 4 of them, and raises the 2t RMSE against ERA5 from 1.39 
 CERRA is 1-2 K colder over the interior of the peninsula. This month includes storm Filomena; the
 link to better-resolved cold pools and snow cover at 5.5 km is a hypothesis, not something tested
 here. This is a one-month side study: the CERRA Zarr is not part of the QC, CI or anemoi dataset.
+
+## Key design decisions
+
+Full log with discarded alternatives in `Decisions.md` (Spanish).
+
+- **GRIB is the canonical raw format** (D-002). One month is also fetched as NetCDF: values are
+  identical, only names (`valid_time` vs `time`) and attributes differ (`reports/grib_vs_netcdf_*.md`).
+- **`tp` is summed, not subsampled** (D-010). It is accumulated, so the 6 h value at T is the sum over (T−6 h, T].
+  A test checks that the 6 h sum equals the hourly sum, and incomplete windows become NaN.
+- **Idempotent ingest** (D-009): one request per month and type, manifest with sha256, `.part` + atomic rename,
+  retries with backoff. Re-running downloads nothing new.
+- **Zarr is rewritten atomically** (D-011) instead of appended, so a failed run never leaves a half-written store.
+- **Two outputs from the same raw files** (D-005): the own Zarr and the anemoi dataset, compared numerically.
+- **zarr v2 pinned** (D-007) because anemoi-datasets 0.5.44 needs it.
+- **Tests and CI never touch the CDS** (D-004).
+
+CDO is used for one step, `remapbil`/`timselsum`, compared against the Xarray equivalent
+(`reports/cdo_vs_xarray.md`): differences are ≤ 1.5e-5 K for `t2m` and 0 for the `tp` sum. CDO labels the
+6 h windows with their centre time and Xarray with the end time; the pipeline uses the latter.
+
+## Quality control
+
+`cli qc` runs 5 critical checks (missing/duplicated timesteps, monotonic coordinates, units, NaN %,
+physical ranges) with thresholds in `configs/iberia.yaml`, and writes JSON + Markdown reports
+(`reports/qc_2026-09-27.md`). On the full 2020–2022 Zarr all checks pass: 4384/4384 timesteps, 0 % NaN,
+no value outside its physical range. `tests/test_qc.py` injects one fault per check and asserts that each is detected.
+
+## Limitations
+
+- **Simulated Slurm, not HPC.** See the Slurm section: two containers on one laptop; no performance claims.
+- **anemoi dataset starts at 2020-01-01 06 UTC** (the first `tp` window needs December 2019, not downloaded),
+  and needs a 10-line custom `grib` source plugin for hourly accumulations (D-014). `tp` differs from the own Zarr by
+  less than one 16-bit quantisation step.
+- **Transform needs ~5 GB of RAM** (builds the whole dataset before writing); the anemoi build peaks at ~1 GB.
+- **CERRA is a one-month, two-variable side study**, not part of the QC, CI or anemoi dataset.
+- **QC checks plausibility, not correctness**: it cannot tell whether ERA5 itself is right.
+- Single domain and period, hard-coded in `configs/`. No model is trained, so nothing here shows the
+  dataset is good for training beyond the checks above.
+- The CDS download itself is tested by hand only; CI uses small fixtures.
+
+## Next steps
+
+Extend the anemoi recipe to more levels/variables; add `task/cgroup` accounting and a real HPC run;
+build the CERRA dataset with the same QC; train a small baseline model to validate the dataset end to end.

@@ -31,7 +31,7 @@ Tener antes del **viernes 16/10/2026** (margen de 6 días sobre el cierre del 22
 | **F5 Anemoi** | Receta YAML en `recipes/` usando fuente `grib` sobre los ficheros locales (join single+pressure, accumulations para `tp`). `anemoi-datasets create` + `inspect`. Comparar estadísticos con el Zarr propio. Notebook corto que abre el dataset con `anemoi.datasets.open_dataset`. | 2 d | vie 09/10 | `inspect` OK; tabla de estadísticos comparados en README |
 | **F6 Slurm (stretch)** | `slurm-docker-cluster` en local; `sbatch` con **job array** por mes para ingest/transform; logs y dependencias entre jobs (`--dependency=afterok`). Etiquetado como simulación. | 1,5 d | mar 13/10 | Job array ejecuta el pipeline completo en el clúster simulado |
 | **F7 CERRA (stretch)** | Subconjunto CERRA (reanálisis regional europeo, rejilla Lambert) para 1 mes; entender la proyección y cómo regridearla con CDO. | 1 d | mié 14/10 | Zarr CERRA + nota de diferencias vs ERA5 |
-| **F8 Cierre** | README en inglés (arquitectura, decisiones clave, resultados QC, limitaciones honestas), actualizar `master_cv.md`, recalcular encaje. | 0,5 d | jue 15/10 | Repo público; CV actualizado |
+| **F8 Cierre** | README en inglés (arquitectura, decisiones clave, resultados QC, limitaciones honestas), actualizar `master_cv.md`, recalcular encaje. | 0,5 d | jue 15/10 | Repo público; CV actualizado. **Paso final:** última ejecución completa de la pipeline para verificar todo y, solo después, borrar `~/proyectos/slurm-docker-cluster` (clon externo de F6; `docker compose down -v` + `docker-buildx` opcional) |
 
 Nota: el lunes 12/10 es festivo; cuenta como día de colchón.
 
